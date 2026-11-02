@@ -23,7 +23,8 @@ public sealed class EngineEnvironment(string dataDirectory)
     /// Per-user folder for engines downloaded on demand (see <see cref="EngineInstaller"/>):
     /// %LOCALAPPDATA%\Filee\engines. It is outside the app folder, so app updates keep it, and inside Filee's
     /// install root, so uninstalling removes it. With FILEE_DATA_DIR set (<see cref="UserDataStore.DirectoryVariable"/>)
-    /// it is the engines folder in there.
+    /// it is the engines folder in there. The app and the command line set it from the folder chosen in Settings →
+    /// Engines (<see cref="ResolveDownloadRoot"/>).
     /// </summary>
     public static string DownloadRoot { get; set; } = DefaultDownloadRoot(UserDataStore.OverrideDirectory);
 
@@ -31,6 +32,15 @@ public sealed class EngineEnvironment(string dataDirectory)
         dataDirectoryOverride is not null
             ? Path.Combine(dataDirectoryOverride, "engines")
             : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Filee", "engines");
+
+    /// <summary>
+    /// <see cref="DownloadRoot"/> for the engine folder in the settings (<c>AppSettings.EngineFolder</c>): that
+    /// folder, or the default when none was chosen.
+    /// </summary>
+    public static string ResolveDownloadRoot(string? chosenFolder) =>
+        string.IsNullOrWhiteSpace(chosenFolder)
+            ? DefaultDownloadRoot(UserDataStore.OverrideDirectory)
+            : Path.GetFullPath(chosenFolder);
 
     /// <summary>
     /// Finds an engine directory (<c>engines/&lt;name&gt;</c>): next to the executable (bundled with the installer),

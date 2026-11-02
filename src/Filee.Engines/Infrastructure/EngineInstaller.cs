@@ -62,17 +62,20 @@ public sealed class EngineInstaller
     private const string MarkerName = ".filee-component";
     private static readonly TimeSpan MsiTimeout = TimeSpan.FromMinutes(15);
 
-    private readonly string _root;
+    private readonly string? _fixedRoot;
     private readonly HttpClient _http;
     private readonly IReadOnlyDictionary<string, EngineComponent> _components;
     private readonly ILogger _logger;
 
-    /// <param name="root">Folder that receives one sub folder per engine (default: EngineEnvironment.DownloadRoot).</param>
+    /// <param name="root">
+    /// Folder that receives one sub folder per engine; when null, EngineEnvironment.DownloadRoot at each use, so the
+    /// installer follows the engine folder chosen in Settings → Engines.
+    /// </param>
     /// <param name="components">Download list; engines.json when null (tests pass their own).</param>
     public EngineInstaller(HttpClient http, string? root = null, IReadOnlyDictionary<string, EngineComponent>? components = null, ILogger? logger = null)
     {
         _http = http;
-        _root = root ?? EngineEnvironment.DownloadRoot;
+        _fixedRoot = root;
         _components = components ?? EngineDownloads.Components;
         _logger = logger ?? NullLogger.Instance;
     }
@@ -89,7 +92,8 @@ public sealed class EngineInstaller
     }
 
     /// <summary>Folder that receives one sub folder per engine.</summary>
-    public string Root => _root;
+    public string Root => _fixedRoot ?? EngineEnvironment.DownloadRoot;
+
 
     /// <summary>The downloads this installer knows: engines.json for this computer unless a test passed its own.</summary>
     public IReadOnlyDictionary<string, EngineComponent> Components => _components;
@@ -131,7 +135,7 @@ public sealed class EngineInstaller
             .ToList();
         var total = Math.Max(1, pending.Sum(c => c.Size));
         long done = 0;
-        Directory.CreateDirectory(_root);
+        Directory.CreateDirectory(Root);
 
         foreach (var component in pending)
         {
@@ -177,7 +181,7 @@ public sealed class EngineInstaller
     /// <exception cref="EngineBusyException">Another process holds the lock.</exception>
     private FileStream LockPackage(EnginePackage package)
     {
-        var locks = Path.Combine(_root, ".downloads", "locks");
+        var locks = Path.Combine(Root, ".downloads", "locks");
         Directory.CreateDirectory(locks);
         try
         {
@@ -193,7 +197,7 @@ public sealed class EngineInstaller
 
     private async Task<string> DownloadAsync(EngineComponent component, Action<long> reportBytes, CancellationToken cancellationToken)
     {
-        var downloads = Path.Combine(_root, ".downloads");
+        var downloads = Path.Combine(Root, ".downloads");
         Directory.CreateDirectory(downloads);
         var file = Path.Combine(downloads, $"{component.Id}-{component.Version}{Path.GetExtension(new Uri(component.Url).AbsolutePath)}");
         var partial = file + ".part";
@@ -257,7 +261,7 @@ public sealed class EngineInstaller
     private async Task UnpackAsync(EngineComponent component, string file, CancellationToken cancellationToken)
     {
         // Short name: LibreOffice's own folder structure is deep, and msiexec fails beyond MAX_PATH (260 chars).
-        var staging = Path.Combine(_root, "~" + Guid.NewGuid().ToString("N")[..6]);
+        var staging = Path.Combine(Root, "~" + Guid.NewGuid().ToString("N")[..6]);
         try
         {
             switch (component.Kind)
@@ -303,7 +307,7 @@ public sealed class EngineInstaller
                     var sevenZip = Archives.SevenZip.Locate()
                                    ?? throw new InvalidOperationException($"{component.Id} needs Filee's 7-Zip, which is missing.");
                     Directory.CreateDirectory(staging);
-                    await sevenZip.ExtractAsync(file, staging, [], _root, cancellationToken);
+                    await sevenZip.ExtractAsync(file, staging, [], Root, cancellationToken);
                     TrimTesseract(staging);
                     Replace(component.Id, staging);
                     break;
@@ -375,7 +379,7 @@ public sealed class EngineInstaller
             _ => throw new NotSupportedException($"No application bundle is specified for {id}."),
         };
         // Keep the mount outside staging so failed unmounts cannot be removed by staging cleanup.
-        var mount = Path.Combine(_root, ".mount-" + Guid.NewGuid().ToString("N"));
+        var mount = Path.Combine(Root, ".mount-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(mount);
         var attached = false;
         try
@@ -584,8 +588,8 @@ public sealed class EngineInstaller
 
     /// <summary>Folder of a component; the LibreOffice extension lives inside LibreOffice.</summary>
     private string FolderOf(string id) => _components.TryGetValue(id, out var component) && component.Kind == "oxt"
-        ? Path.Combine(_root, "libreoffice", "share", "extensions", ExtensionFolder(id))
-        : Path.Combine(_root, id);
+        ? Path.Combine(Root, "libreoffice", "share", "extensions", ExtensionFolder(id))
+        : Path.Combine(Root, id);
 
     private static string ExtensionFolder(string id) => id switch
     {

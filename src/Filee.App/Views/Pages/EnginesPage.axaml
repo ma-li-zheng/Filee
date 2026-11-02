@@ -35,6 +35,28 @@
         </StackPanel>
       </DockPanel>
 
+      <!-- Where the optional engines are stored: moving them keeps several GB off the system drive. -->
+      <StackPanel Spacing="10">
+        <StackPanel Spacing="2">
+          <TextBlock Classes="h2" Text="{DynamicResource engines.folder_title}" />
+          <TextBlock Classes="muted" TextWrapping="Wrap" Text="{DynamicResource engines.folder_description}" />
+        </StackPanel>
+        <Border Classes="card" Padding="16,12">
+          <DockPanel>
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="12,0,0,0">
+              <Button Content="{DynamicResource engines.folder_change}" Click="OnChangeEngineFolder" IsEnabled="{Binding !IsMovingEngines}" />
+              <Button Content="{DynamicResource engines.folder_default}" Click="OnDefaultEngineFolder" IsVisible="{Binding HasCustomEngineFolder}"
+                      IsEnabled="{Binding !IsMovingEngines}" />
+            </StackPanel>
+            <StackPanel Spacing="4" VerticalAlignment="Center">
+              <TextBlock Text="{Binding EngineFolder}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding EngineFolder}" />
+              <TextBlock Classes="caption" Text="{DynamicResource engines.folder_moving}" IsVisible="{Binding IsMovingEngines}" />
+              <ProgressBar Classes="soft" Maximum="100" Value="{Binding MoveProgress}" IsVisible="{Binding IsMovingEngines}" />
+            </StackPanel>
+          </DockPanel>
+        </Border>
+      </StackPanel>
+
       <!-- Optional engines: downloaded on demand because they are large. -->
       <StackPanel Spacing="10">
         <StackPanel Spacing="2">
