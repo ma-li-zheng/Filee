@@ -226,6 +226,12 @@ public sealed class AppSettings
     public Dictionary<string, string> EngineOwnCopies { get; set; } = [];
 
     /// <summary>
+    /// Folder the optional engines are downloaded to (Settings → Engines); null for the default
+    /// (%LOCALAPPDATA%\Filee\engines). A folder the user chose is left alone when Filee is uninstalled.
+    /// </summary>
+    public string? EngineFolder { get; set; }
+
+    /// <summary>
     /// With LibreOffice installed, presentations (PPTX, PPT, ODP) → PDF go through it instead of the built-in route
     /// (HWPX writer and rhwp): slide backgrounds and shape positions come out as in PowerPoint.
     /// </summary>

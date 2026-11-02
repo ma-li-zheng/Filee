@@ -317,6 +317,10 @@ public partial class App : Application
         var ownCopiesChanged = !EngineEnvironment.OwnCopies.OrderBy(p => p.Key).SequenceEqual(settings.EngineOwnCopies.OrderBy(p => p.Key));
         if (ownCopiesChanged)
             EngineEnvironment.OwnCopies = new Dictionary<string, string>(settings.EngineOwnCopies);
+        var engineFolder = EngineEnvironment.ResolveDownloadRoot(settings.EngineFolder);
+        var engineFolderChanged = engineFolder != EngineEnvironment.DownloadRoot;
+        if (engineFolderChanged)
+            EngineEnvironment.DownloadRoot = engineFolder;
         var routesChanged = EngineEnvironment.LibreOfficeForSlides != settings.LibreOfficeForSlides
                             || EngineEnvironment.LibreOfficeForHwp != settings.LibreOfficeForHwp
                             || EngineEnvironment.LibreOfficeForDocuments != settings.LibreOfficeForDocuments
@@ -334,7 +338,7 @@ public partial class App : Application
         AppHost.Get<ThemeService>().Apply(settings.Theme, loc.Language, custom);
         AppHost.Get<TriggerService>().Apply(settings);
         AppHost.Get<ConverterCatalog>().Priority = settings.EnginePriority;
-        if (ownCopiesChanged || routesChanged)
+        if (ownCopiesChanged || routesChanged || engineFolderChanged)
         {
             AppHost.Get<ConverterCatalog>().Refresh();
             AppHost.Get<EngineDownloadService>().RefreshStatus();

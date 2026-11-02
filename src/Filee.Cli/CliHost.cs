@@ -41,6 +41,9 @@ internal sealed class CliHost : IAsyncDisposable
         var store = new UserDataStore(dataDirectory ?? UserDataStore.DefaultDirectory);
         store.Load();
         EngineEnvironment.OwnCopies = new Dictionary<string, string>(store.Settings.EngineOwnCopies);
+        // Only a folder the user chose: tests point DownloadRoot at their own folder and keep the default setting.
+        if (!string.IsNullOrWhiteSpace(store.Settings.EngineFolder))
+            EngineEnvironment.DownloadRoot = EngineEnvironment.ResolveDownloadRoot(store.Settings.EngineFolder);
         EngineEnvironment.LibreOfficeForSlides = store.Settings.LibreOfficeForSlides;
         EngineEnvironment.LibreOfficeForHwp = store.Settings.LibreOfficeForHwp;
         EngineEnvironment.LibreOfficeForDocuments = store.Settings.LibreOfficeForDocuments;

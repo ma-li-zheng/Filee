@@ -1,5 +1,4 @@
-// Conversion engines: optional downloads, availability and priority order. Filee only uses its own engine copies,
-// so there are no paths to configure.
+// Conversion engines: optional downloads and the folder they are stored in, availability and priority order.
 
 using System.Collections.ObjectModel;
 using Avalonia.Threading;
@@ -57,13 +56,16 @@ public sealed partial class EnginesPageViewModel : ObservableObject, IDisposable
     private readonly ConverterCatalog _catalog;
     private readonly ILocalizer _loc;
     private readonly EngineDownloadService _downloads;
+    private readonly JobQueue? _queue;
 
-    public EnginesPageViewModel(UserDataStore store, ConverterCatalog catalog, ILocalizer loc, EngineDownloadService downloads)
+    public EnginesPageViewModel(UserDataStore store, ConverterCatalog catalog, ILocalizer loc, EngineDownloadService downloads,
+        JobQueue? queue = null)
     {
         _store = store;
         _catalog = catalog;
         _loc = loc;
         _downloads = downloads;
+        _queue = queue;
         _libreOfficeForSlides = store.Settings.LibreOfficeForSlides;
         _libreOfficeForHwp = store.Settings.LibreOfficeForHwp;
         _libreOfficeForDocuments = store.Settings.LibreOfficeForDocuments;
@@ -141,6 +143,75 @@ public sealed partial class EnginesPageViewModel : ObservableObject, IDisposable
     {
         if (_store.Settings.EngineOwnCopies.Remove(package.Package.Id))
             _store.SaveSettings();
+    }
+
+    /// <summary>Where the optional engines are downloaded to (Settings → Engines).</summary>
+    public string EngineFolder => EngineEnvironment.DownloadRoot;
+
+    /// <summary>The user chose the engine folder (it isn't the default).</summary>
+    public bool HasCustomEngineFolder => !string.IsNullOrWhiteSpace(_store.Settings.EngineFolder);
+
+    /// <summary>The engines are being moved to another folder.</summary>
+    [ObservableProperty] private bool _isMovingEngines;
+
+    /// <summary>Progress of the move, 0 to 100.</summary>
+    [ObservableProperty] private double _moveProgress;
+
+    /// <summary>
+    /// Why the engines can't move to <paramref name="target"/> (null for the default folder), as a text for the user;
+    /// null when they can.
+    /// </summary>
+    public string? CheckEngineFolder(string? target)
+    {
+        if (_downloads.IsBusy || _queue?.IsBusy == true || IsMovingEngines)
+            return _loc["engines.folder_busy"];
+        return EngineFolderCheckOf(target) switch
+        {
+            EngineFolderCheck.Nested => _loc["engines.folder_nested"],
+            EngineFolderCheck.NotEmpty => _loc["engines.folder_not_empty"],
+            EngineFolderCheck.Invalid => _loc["engines.folder_invalid"],
+            _ => null,
+        };
+    }
+
+    /// <summary>True when <paramref name="target"/> is the folder the engines are in already (nothing to move).</summary>
+    public bool IsCurrentEngineFolder(string? target) => EngineFolderCheckOf(target) == EngineFolderCheck.Same;
+
+    private static EngineFolderCheck EngineFolderCheckOf(string? target) =>
+        Filee.Engines.Infrastructure.EngineFolder.Check(EngineEnvironment.DownloadRoot, EngineEnvironment.ResolveDownloadRoot(target));
+
+    /// <summary>
+    /// Moves the engines to <paramref name="target"/> (null: back to the default folder) and saves it as the engine
+    /// folder; App.ApplySettings then points the engines there. Returns the error to show, or null when it worked.
+    /// </summary>
+    public async Task<string?> ChangeEngineFolderAsync(string? target)
+    {
+        if (CheckEngineFolder(target) is { } problem)
+            return problem;
+        var folder = EngineEnvironment.ResolveDownloadRoot(target);
+        IsMovingEngines = true;
+        MoveProgress = 0;
+        try
+        {
+            if (!IsCurrentEngineFolder(target))
+            {
+                var progress = new Progress<double>(p => MoveProgress = p * 100);
+                await Filee.Engines.Infrastructure.EngineFolder.MoveAsync(EngineEnvironment.DownloadRoot, folder, progress, CancellationToken.None);
+            }
+            _store.Settings.EngineFolder = target is null ? null : folder;
+            _store.SaveSettings(); // App.ApplySettings sets EngineEnvironment.DownloadRoot and re-checks the engines
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return _loc.Format("engines.folder_failed", ex.Message);
+        }
+        finally
+        {
+            IsMovingEngines = false;
+            OnPropertyChanged(nameof(EngineFolder));
+            OnPropertyChanged(nameof(HasCustomEngineFolder));
+        }
     }
 
     // Installing or removing an engine changes the list below (status, supported conversions).

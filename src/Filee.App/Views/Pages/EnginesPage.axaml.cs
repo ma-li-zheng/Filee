@@ -1,4 +1,5 @@
-// Engines page: optional downloads (install, use your own copy, LibreOffice settings) and the priority order, changed
+// Engines page: the folder the engines are stored in, optional downloads (install, use your own copy, LibreOffice
+// settings) and the priority order, changed
 // by dragging a card or with its arrows.
 //
 // Dragging: the list captures the pointer (cards are re-created as they move), the card moves as soon as the pointer
@@ -180,6 +181,46 @@ public partial class EnginesPage : UserControl
     {
         if (sender is Button { DataContext: EnginePackageState package } && DataContext is EnginesPageViewModel vm)
             vm.StopUsingOwnCopy(package);
+    }
+
+    /// <summary>Picks a folder for the engines and moves them there.</summary>
+    private async void OnChangeEngineFolder(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not EnginesPageViewModel vm || TopLevel.GetTopLevel(this) is not Window window)
+            return;
+        var loc = AppHost.Get<ILocalizer>();
+        var folders = await window.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = loc["engines.folder_picker_title"],
+            AllowMultiple = false,
+        });
+        if (folders.FirstOrDefault()?.TryGetLocalPath() is not { } path)
+            return;
+        await MoveEnginesAsync(vm, window, path);
+    }
+
+    /// <summary>Moves the engines back to the default folder.</summary>
+    private async void OnDefaultEngineFolder(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is EnginesPageViewModel vm && TopLevel.GetTopLevel(this) is Window window)
+            await MoveEnginesAsync(vm, window, null);
+    }
+
+    /// <param name="path">The new engine folder; null for the default.</param>
+    private static async Task MoveEnginesAsync(EnginesPageViewModel vm, Window window, string? path)
+    {
+        var loc = AppHost.Get<ILocalizer>();
+        var windows = AppHost.Get<WindowService>();
+        if (vm.CheckEngineFolder(path) is { } problem)
+        {
+            await windows.MessageAsync(window, problem);
+            return;
+        }
+        var folder = Filee.Engines.Infrastructure.EngineEnvironment.ResolveDownloadRoot(path);
+        if (!vm.IsCurrentEngineFolder(path) && !await windows.ConfirmAsync(window, loc.Format("engines.folder_move_confirm", folder)))
+            return;
+        if (await vm.ChangeEngineFolderAsync(path) is { } error)
+            await windows.MessageAsync(window, error);
     }
 
     private async void OnRemove(object? sender, RoutedEventArgs e)
